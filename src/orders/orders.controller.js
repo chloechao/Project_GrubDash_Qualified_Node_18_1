@@ -11,7 +11,7 @@ const bodyDataHas = require("../utils/bodyDataHas");
 // TODO: Implement the /orders handlers needed to make the tests pass
 // create, read, update, delete, and list
 function dataIsValid(req, res, next){
-    const { data: { deliverTo, mobileNumber, dishes,  status} } = req.body;
+    const { data: { id, deliverTo, mobileNumber, dishes,  status } } = req.body;
 
     if(Array.isArray(dishes)) {
         const hasInvalidQuantity = dishes.some((dish) => typeof (dish.quantity) !== "number" || dish.quantity <= 0)
@@ -34,12 +34,14 @@ function dataIsValid(req, res, next){
             message: `Please check dish deliverTo mobileNumber status prop`
         });
     }
+
+    res.locals.orderData = { id, deliverTo, mobileNumber, dishes,  status };
     next();
 }
 
 function updateDataIsValid(req, res, next) {
     const { orderId } = req.params;
-    const { data: { status, id } = {} } = req.body;
+    const { data: { id, deliverTo, mobileNumber, status, dishes } = {} } = req.body;
     const orderStatus = orders.find((order) => order.id === orderId);
     if (id && id !== orderId) {
         return next({
@@ -47,18 +49,23 @@ function updateDataIsValid(req, res, next) {
             message: `Order id does not match route id. id: ${id}, route id: ${orderId}`,
         });
     }
+
     if (!orderStatus) {
         return next({
             status: 404,
             message: `Order not found: ${orderId}`,
         });
     }
+
     if (status === "" || orderStatus.status === "delivered") {
         return next({
             status: 400,
             message: `Cannot update order because status cannot be updated. orderStatus: ${orderStatus.status}`,
         });
     }
+
+    res.locals.orderId = orderId;
+    res.locals.orderData = { id, deliverTo, mobileNumber, status, dishes };
     next();
 }
 
@@ -67,8 +74,11 @@ function orderExists(req, res, next) {
     const { orderId } = req.params;
     const { data: { id  } = {} } = req.body;
     const orderById = orders.filter((order) => order.id === orderId)
-    if (orderById.length > 0 || id === orderId) {
+    const index = orders.findIndex(order => order.id === orderId);
+
+    if (orderById.length > 0 || id === orderId || index !== -1) {
         res.locals.order = orderById;
+        res.locals.orderIndex = index;
         return next();
     }
     next({
@@ -100,7 +110,7 @@ function read(req, res) {
 }
 
 function create(req, res) {
-    const { data: { deliverTo, mobileNumber, status, dishes } = {} } = req.body;
+    const { deliverTo, mobileNumber, status, dishes } = res.locals.orderData;
     const newOrder = {
         id: nextId(),
         deliverTo: deliverTo,
@@ -114,42 +124,22 @@ function create(req, res) {
 }
 
 function update(req, res, next) {
-    const { orderId } = req.params;
-    const { data: { id, deliverTo, mobileNumber, status, dishes } = {} } = req.body;
-
-    if (id && id !== orderId) {
-        return next({
-            status: 400,
-            message: `Order id does not match route id. id: ${id}, route id: ${orderId}`,
-        });
-    }
-
-    const index = orders.findIndex(order => order.id === orderId);
-    if (index === -1) {
-        return next({
-            status: 404,
-            message: `Order not found: ${orderId}`,
-        });
-    }
-
+    const { deliverTo, mobileNumber, status, dishes } = res.locals.orderData
     const updatedOrder = {
-        id: orderId,
+        id: req.params.orderId,
         deliverTo: deliverTo,
         mobileNumber: mobileNumber,
         status: status,
         dishes: dishes
     };
 
-    orders[index] = updatedOrder;
+    orders[ res.locals.orderIndex ] = updatedOrder;
     res.json({ data: updatedOrder });
 }
 
 
 function destroy(req, res) {
-    const { orderId } = req.params;
-    const index = orders.findIndex((order) => order.id === orderId);
-    // `splice()` returns an array of the deleted elements, even if it is one element
-    const deletedPastes = orders.splice(index, 1);
+    orders.splice(res.locals.orderIndex, 1);
     res.sendStatus(204);
 }
 module.exports = {

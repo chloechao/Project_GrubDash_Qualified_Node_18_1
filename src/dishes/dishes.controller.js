@@ -27,6 +27,9 @@ function dataIsValid(req, res, next) {
             message: `Check name, price, description, and image_url in the payload`
         });
     }
+
+    res.locals.dishId = dishId;
+    res.locals.dishData = { id, name, price, description, image_url };
     next();
 }
 
@@ -35,8 +38,11 @@ function dishExists(req, res, next) {
     const { dishId } = req.params;
     const { data: { id  } = {} } = req.body;
     const dishById = dishes.filter((dish) => dish.id === dishId)
-    if (dishById.length > 0  || id === dishId) {
+    const index = dishes.findIndex(dish => dish.id === dishId);
+
+    if (dishById.length > 0  || id === dishId || index !== -1) {
         res.locals.dish = dishById;
+        res.locals.dishIndex = index;
         return next();
     }
     next({
@@ -55,7 +61,7 @@ function read(req, res) {
 }
 
 function create(req, res) {
-    const { data: { name, description, price, image_url } = {} } = req.body;
+    const { name, description, price, image_url } = res.locals.dishData
     const newDish = {
         id: nextId(),
         name: name,
@@ -69,33 +75,17 @@ function create(req, res) {
 }
 
 function update(req, res) {
-    const { dishId } = req.params;
-    const { data: { id, name, description, price, image_url } = {} } = req.body;
-
-    if (id && id !== dishId) {
-        return next({
-            status: 400,
-            message: `Dish id does not match route id. id: ${id}, route id: ${dishId}`,
-        });
-    }
-
-    const index = dishes.findIndex(dish => dish.id === dishId);
-    if (index === -1) {
-        return next({
-            status: 404,
-            message: `Dish not found: ${dishId}`,
-        });
-    }
+    const { name, price, description, image_url } = res.locals.dishData;
 
     const updatedDish = {
-        id: dishId,
+        id: res.locals.dishId,
         name: name,
         description: description,
         price: price,
         image_url: image_url
     };
 
-    dishes[index] = updatedDish;
+    dishes[res.locals.dishIndex] = updatedDish;
     res.json({ data: updatedDish });
 }
 
